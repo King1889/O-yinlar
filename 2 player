@@ -1,0 +1,2876 @@
+```html
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Battle Arena Multiplayer Parkour</title>
+
+<style>
+*{
+  box-sizing:border-box;
+  user-select:none;
+}
+
+html,body{
+  margin:0;
+  width:100%;
+  height:100%;
+  overflow:hidden;
+  background:#080b10;
+  font-family:Arial,sans-serif;
+}
+
+body{
+  display:flex;
+  justify-content:center;
+  align-items:center;
+}
+
+canvas{
+  width:min(100vw,1500px);
+  height:auto;
+  max-height:100vh;
+  display:block;
+  border:2px solid #222;
+  background:#111;
+}
+
+#help{
+  position:fixed;
+  left:10px;
+  bottom:10px;
+  padding:8px 12px;
+  background:rgba(0,0,0,.72);
+  color:white;
+  border-radius:10px;
+  font-size:12px;
+  z-index:5;
+}
+</style>
+</head>
+
+<body>
+
+<canvas id="game" width="1500" height="844"></canvas>
+
+<div id="help">
+P1: WASD + F | P2: ARROWS + L | Q/E va O/I: qurol | Z/X: zona | R: restart
+</div>
+
+<script>
+
+const canvas=document.getElementById("game");
+const ctx=canvas.getContext("2d");
+
+const W=1500;
+const H=844;
+
+let keys={};
+
+let gameOver=false;
+let winner=null;
+
+let zone=0;
+
+let bullets=[];
+let particles=[];
+let texts=[];
+let pickups=[];
+
+let kills1=0;
+let kills2=0;
+
+let pickupSpawnTimer=0;
+let pickupSpawnDelay=700;
+
+
+/* =====================================================
+                     WEAPONS
+===================================================== */
+
+const weapons=[
+
+{
+ name:"PISTOL",
+ damage:18,
+ speed:19,
+ cooldown:22,
+ maxAmmo:12,
+ color:"#ffd166",
+ size:4,
+ count:1,
+ spread:0,
+ type:"pistol"
+},
+
+{
+ name:"SMG",
+ damage:7,
+ speed:22,
+ cooldown:5,
+ maxAmmo:30,
+ color:"#5ee7ff",
+ size:3,
+ count:1,
+ spread:.02,
+ type:"smg"
+},
+
+{
+ name:"SHOTGUN",
+ damage:8,
+ speed:16,
+ cooldown:38,
+ maxAmmo:6,
+ color:"#ff9f43",
+ size:5,
+ count:7,
+ spread:.25,
+ type:"shotgun"
+},
+
+{
+ name:"LASER",
+ damage:22,
+ speed:31,
+ cooldown:25,
+ maxAmmo:10,
+ color:"#ff4dff",
+ size:4,
+ count:1,
+ spread:0,
+ type:"laser"
+},
+
+{
+ name:"PLASMA",
+ damage:28,
+ speed:12,
+ cooldown:40,
+ maxAmmo:5,
+ color:"#70ff70",
+ size:9,
+ count:1,
+ spread:0,
+ type:"plasma"
+},
+
+{
+ name:"HEAVY",
+ damage:38,
+ speed:10,
+ cooldown:52,
+ maxAmmo:3,
+ color:"#ff5555",
+ size:10,
+ count:1,
+ spread:0,
+ type:"heavy"
+}
+
+];
+
+
+/* =====================================================
+                       ZONES
+===================================================== */
+
+const zones=[
+
+{
+ name:"GREEN VALLEY",
+ sky1:"#55bdf2",
+ sky2:"#e8fbff",
+ ground:"#3d9149"
+},
+
+{
+ name:"NEON CITY",
+ sky1:"#151b42",
+ sky2:"#565d9b",
+ ground:"#343844"
+},
+
+{
+ name:"FACTORY",
+ sky1:"#252936",
+ sky2:"#656a78",
+ ground:"#4b4d52"
+},
+
+{
+ name:"DESERT RUN",
+ sky1:"#efa85c",
+ sky2:"#ffe7ae",
+ ground:"#b77a37"
+},
+
+{
+ name:"ICE MOUNTAIN",
+ sky1:"#79d8ff",
+ sky2:"#effcff",
+ ground:"#b9eaf4"
+},
+
+{
+ name:"SPACE STATION",
+ sky1:"#050719",
+ sky2:"#27295f",
+ ground:"#39396b"
+},
+
+{
+ name:"ROOFTOPS",
+ sky1:"#222936",
+ sky2:"#6c7894",
+ ground:"#464b58"
+},
+
+{
+ name:"VOLCANO",
+ sky1:"#260b0b",
+ sky2:"#8e3020",
+ ground:"#51312c"
+}
+
+];
+
+
+/* =====================================================
+                    PARKOUR MAPS
+===================================================== */
+
+const mapLayouts=[
+
+/* GREEN */
+[
+[0,760,1500,84],
+
+[30,650,190,25],
+[290,570,150,25],
+[500,470,130,25],
+[710,590,150,25],
+[930,460,150,25],
+[1150,560,170,25],
+[1370,420,130,25],
+
+[100,390,140,25],
+[350,300,150,25],
+[600,210,150,25],
+[850,320,150,25],
+[1080,220,150,25],
+[1300,300,160,25]
+],
+
+/* CITY */
+[
+[0,760,1500,84],
+
+[0,650,180,25],
+[250,590,130,25],
+[430,500,150,25],
+[650,390,140,25],
+[850,500,160,25],
+[1080,400,130,25],
+[1260,520,180,25],
+
+[100,410,120,25],
+[330,330,150,25],
+[570,250,140,25],
+[800,180,150,25],
+[1030,290,150,25],
+[1280,180,160,25]
+],
+
+/* FACTORY */
+[
+[0,760,1500,84],
+
+[50,660,170,25],
+[280,540,120,25],
+[430,650,130,25],
+[610,470,150,25],
+[820,580,130,25],
+[980,410,160,25],
+[1190,520,130,25],
+[1360,370,140,25],
+
+[150,350,130,25],
+[360,250,140,25],
+[590,330,140,25],
+[800,220,140,25],
+[1030,300,150,25],
+[1260,200,160,25]
+],
+
+/* DESERT */
+[
+[0,760,1500,84],
+
+[40,650,200,25],
+[310,560,140,25],
+[500,480,130,25],
+[690,590,140,25],
+[900,470,150,25],
+[1110,570,140,25],
+[1300,450,170,25],
+
+[120,370,160,25],
+[380,290,140,25],
+[590,200,150,25],
+[830,310,150,25],
+[1060,190,150,25],
+[1300,300,150,25]
+],
+
+/* ICE */
+[
+[0,760,1500,84],
+
+[40,650,170,25],
+[260,550,130,25],
+[450,450,140,25],
+[650,350,150,25],
+[860,460,130,25],
+[1050,330,160,25],
+[1280,500,180,25],
+
+[100,360,140,25],
+[330,270,150,25],
+[570,180,130,25],
+[790,270,150,25],
+[1030,190,140,25],
+[1250,280,170,25]
+],
+
+/* SPACE */
+[
+[0,760,1500,84],
+
+[30,650,170,25],
+[260,540,120,25],
+[430,620,130,25],
+[620,450,150,25],
+[850,560,130,25],
+[1010,410,150,25],
+[1210,520,130,25],
+[1370,350,130,25],
+
+[100,350,140,25],
+[350,240,140,25],
+[600,320,140,25],
+[830,200,150,25],
+[1070,290,140,25],
+[1290,180,150,25]
+],
+
+/* ROOFTOPS */
+[
+[0,760,1500,84],
+
+[0,650,170,25],
+[220,560,120,25],
+[390,470,120,25],
+[560,580,130,25],
+[750,430,120,25],
+[930,530,130,25],
+[1120,390,120,25],
+[1320,500,180,25],
+
+[120,350,120,25],
+[330,250,130,25],
+[550,330,130,25],
+[760,220,120,25],
+[970,300,130,25],
+[1190,180,140,25]
+],
+
+/* VOLCANO */
+[
+[0,760,1500,84],
+
+[30,650,180,25],
+[270,570,120,25],
+[430,450,130,25],
+[630,560,140,25],
+[820,400,130,25],
+[1000,520,140,25],
+[1190,360,140,25],
+[1370,500,130,25],
+
+[120,350,130,25],
+[350,230,140,25],
+[570,320,130,25],
+[780,180,140,25],
+[1010,260,140,25],
+[1240,170,160,25]
+]
+
+];
+
+let platforms=[];
+
+
+/* =====================================================
+                  CREATE PLATFORMS
+===================================================== */
+
+function makePlatforms(){
+
+  platforms=mapLayouts[zone].map(p=>({
+
+    x:p[0],
+    y:p[1],
+    w:p[2],
+    h:p[3]
+
+  }));
+
+}
+
+
+/* =====================================================
+                      PLAYER
+===================================================== */
+
+function createPlayer(x,color,name,type,controls){
+
+  return{
+
+    x:x,
+    y:600,
+
+    w:38,
+    h:58,
+
+    vx:0,
+    vy:0,
+
+    color:color,
+
+    name:name,
+    type:type,
+
+    hp:100,
+    maxHp:100,
+
+    speed:5.2,
+    jump:13,
+
+    facing:type===1?1:-1,
+
+    controls:controls,
+
+    weapon:-1,
+
+    ammo:0,
+
+    cooldown:0,
+
+    grounded:false,
+
+    jumps:0,
+
+    maxJumps:2,
+
+    jumpPressed:false
+
+  };
+
+}
+
+
+let p1=createPlayer(
+180,
+"#42a5ff",
+"P1",
+1,
+{
+left:"a",
+right:"d",
+jump:"w",
+shoot:"f",
+next:"e",
+prev:"q"
+}
+);
+
+
+let p2=createPlayer(
+1280,
+"#ff4d6d",
+"P2",
+2,
+{
+left:"ArrowLeft",
+right:"ArrowRight",
+jump:"ArrowUp",
+shoot:"l",
+next:"i",
+prev:"o"
+}
+);
+
+
+makePlatforms();
+
+
+/* =====================================================
+                     KEYBOARD
+===================================================== */
+
+window.addEventListener("keydown",e=>{
+
+  keys[e.key]=true;
+
+  if(
+    ["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"," "]
+    .includes(e.key)
+  ){
+    e.preventDefault();
+  }
+
+
+  if(e.key.toLowerCase()==="r"){
+    resetRound();
+  }
+
+
+  if(e.key.toLowerCase()==="z"){
+
+    zone--;
+
+    if(zone<0)
+      zone=zones.length-1;
+
+    changeZone();
+
+  }
+
+
+  if(e.key.toLowerCase()==="x"){
+
+    zone++;
+
+    if(zone>=zones.length)
+      zone=0;
+
+    changeZone();
+
+  }
+
+
+  if(e.key===p1.controls.next)
+    switchWeapon(p1,1);
+
+  if(e.key===p1.controls.prev)
+    switchWeapon(p1,-1);
+
+  if(e.key===p2.controls.next)
+    switchWeapon(p2,1);
+
+  if(e.key===p2.controls.prev)
+    switchWeapon(p2,-1);
+
+});
+
+
+window.addEventListener("keyup",e=>{
+  keys[e.key]=false;
+});
+
+
+/* =====================================================
+                  WEAPON SWITCH
+===================================================== */
+
+function switchWeapon(p,direction){
+
+  if(weapons.length===0)
+    return;
+
+  if(p.weapon===-1){
+
+    p.weapon=
+      direction>0?
+      0:
+      weapons.length-1;
+
+    p.ammo=weapons[p.weapon].maxAmmo;
+
+    showWeaponText(p);
+
+    return;
+  }
+
+  p.weapon=
+    (p.weapon+direction+weapons.length)
+    %weapons.length;
+
+  p.ammo=weapons[p.weapon].maxAmmo;
+
+  showWeaponText(p);
+
+}
+
+
+function showWeaponText(p){
+
+  texts.push({
+
+    x:p.x+p.w/2,
+    y:p.y-20,
+
+    text:
+      weapons[p.weapon].name+
+      " x"+
+      p.ammo,
+
+    life:70,
+    big:false
+
+  });
+
+}
+
+
+/* =====================================================
+                      ZONE
+===================================================== */
+
+function changeZone(){
+
+  makePlatforms();
+
+  bullets=[];
+  particles=[];
+  pickups=[];
+
+  resetPlayer(p1,180);
+  resetPlayer(p2,1280);
+
+  pickupSpawnTimer=0;
+
+  spawnFirstPickups();
+
+}
+
+
+/* =====================================================
+                  RESET PLAYER
+===================================================== */
+
+function resetPlayer(p,x){
+
+  p.x=x;
+  p.y=600;
+
+  p.vx=0;
+  p.vy=0;
+
+  p.hp=100;
+
+  p.weapon=-1;
+  p.ammo=0;
+
+  p.cooldown=0;
+
+  p.grounded=false;
+  p.jumps=0;
+
+}
+
+
+/* =====================================================
+                   RESET ROUND
+===================================================== */
+
+function resetRound(){
+
+  gameOver=false;
+  winner=null;
+
+  bullets=[];
+  particles=[];
+  texts=[];
+  pickups=[];
+
+  pickupSpawnTimer=0;
+
+  resetPlayer(p1,180);
+  resetPlayer(p2,1280);
+
+  spawnFirstPickups();
+
+}
+
+
+/* =====================================================
+               PICKUP SPAWNING SYSTEM
+===================================================== */
+
+function spawnFirstPickups(){
+
+  pickups=[];
+
+  spawnOnePickup();
+  spawnOnePickup();
+
+}
+
+
+function spawnOnePickup(){
+
+  const available=
+    platforms.filter(
+      p=>p.y<700 && p.w>=110
+    );
+
+  if(available.length===0)
+    return;
+
+  const plat=
+    available[
+      Math.floor(
+        Math.random()*available.length
+      )
+    ];
+
+  const weapon=
+    Math.floor(
+      Math.random()*weapons.length
+    );
+
+  pickups.push({
+
+    x:plat.x+plat.w/2-25,
+
+    y:plat.y-48,
+
+    w:50,
+    h:42,
+
+    weapon:weapon,
+
+    life:1000
+
+  });
+
+}
+
+
+function updatePickups(){
+
+  pickupSpawnTimer++;
+
+
+  /* sekin spawn */
+
+  if(
+    pickupSpawnTimer>
+    pickupSpawnDelay
+  ){
+
+    if(pickups.length<5){
+
+      spawnOnePickup();
+
+    }
+
+    pickupSpawnTimer=0;
+
+    pickupSpawnDelay=
+      650+
+      Math.random()*750;
+
+  }
+
+
+  for(let i=pickups.length-1;i>=0;i--){
+
+    const item=pickups[i];
+
+    item.life--;
+
+
+    if(item.life<=0){
+
+      pickups.splice(i,1);
+
+      continue;
+
+    }
+
+
+    if(playerTouchesPickup(p1,item)){
+
+      collectWeapon(
+        p1,
+        item.weapon
+      );
+
+      pickups.splice(i,1);
+
+      continue;
+
+    }
+
+
+    if(playerTouchesPickup(p2,item)){
+
+      collectWeapon(
+        p2,
+        item.weapon
+      );
+
+      pickups.splice(i,1);
+
+      continue;
+
+    }
+
+  }
+
+}
+
+
+function playerTouchesPickup(p,item){
+
+  return(
+
+    p.x<item.x+item.w &&
+    p.x+p.w>item.x &&
+    p.y<item.y+item.h &&
+    p.y+p.h>item.y
+
+  );
+
+}
+
+
+/* =====================================================
+                 COLLECT WEAPON
+===================================================== */
+
+function collectWeapon(p,weapon){
+
+  p.weapon=weapon;
+
+  p.ammo=
+    weapons[weapon].maxAmmo;
+
+  p.cooldown=0;
+
+  texts.push({
+
+    x:p.x+p.w/2,
+
+    y:p.y-20,
+
+    text:
+      weapons[weapon].name+
+      "  AMMO "+p.ammo,
+
+    life:80,
+
+    big:false
+
+  });
+
+
+  for(let i=0;i<16;i++){
+
+    particles.push({
+
+      x:p.x+p.w/2,
+
+      y:p.y+20,
+
+      vx:(Math.random()-.5)*8,
+
+      vy:(Math.random()-.5)*8,
+
+      life:30+Math.random()*30,
+
+      size:3+Math.random()*4,
+
+      color:
+        weapons[weapon].color
+
+    });
+
+  }
+
+}
+
+
+/* =====================================================
+                  PLAYER UPDATE
+===================================================== */
+
+function updatePlayer(p,enemy){
+
+  if(gameOver)
+    return;
+
+
+  /* MOVEMENT */
+
+  if(keys[p.controls.left]){
+
+    p.vx=-p.speed;
+    p.facing=-1;
+
+  }
+
+  else if(keys[p.controls.right]){
+
+    p.vx=p.speed;
+    p.facing=1;
+
+  }
+
+  else{
+
+    p.vx*=.78;
+
+  }
+
+
+  /* DOUBLE JUMP */
+
+  if(
+    keys[p.controls.jump] &&
+    !p.jumpPressed
+  ){
+
+    if(p.grounded){
+
+      p.vy=-p.jump;
+
+      p.grounded=false;
+
+      p.jumps=1;
+
+    }
+
+    else if(
+      p.jumps<p.maxJumps
+    ){
+
+      p.vy=-p.jump;
+
+      p.jumps++;
+
+    }
+
+    p.jumpPressed=true;
+
+  }
+
+
+  if(!keys[p.controls.jump])
+    p.jumpPressed=false;
+
+
+  p.vy+=.62;
+
+  p.x+=p.vx;
+
+
+  if(p.x<0){
+
+    p.x=0;
+    p.vx=0;
+
+  }
+
+
+  if(p.x+p.w>W){
+
+    p.x=W-p.w;
+    p.vx=0;
+
+  }
+
+
+  const oldBottom=
+    p.y+p.h;
+
+  p.y+=p.vy;
+
+  p.grounded=false;
+
+
+  /* PLATFORM COLLISION */
+
+  for(const plat of platforms){
+
+    if(
+
+      oldBottom<=plat.y &&
+
+      p.y+p.h>=plat.y &&
+
+      p.x+p.w>plat.x &&
+
+      p.x<plat.x+plat.w &&
+
+      p.vy>=0
+
+    ){
+
+      p.y=plat.y-p.h;
+
+      p.vy=0;
+
+      p.grounded=true;
+
+      p.jumps=0;
+
+    }
+
+  }
+
+
+  if(p.y>H+100){
+
+    p.hp=0;
+
+    endRound(enemy);
+
+  }
+
+
+  if(p.cooldown>0)
+    p.cooldown--;
+
+
+  /* SHOOT */
+
+  if(
+    keys[p.controls.shoot] &&
+    p.cooldown<=0 &&
+    p.weapon!==-1 &&
+    p.ammo>0
+  ){
+
+    shoot(p);
+
+    p.ammo--;
+
+    p.cooldown=
+      weapons[p.weapon].cooldown;
+
+
+    if(p.ammo<=0){
+
+      texts.push({
+
+        x:p.x+p.w/2,
+
+        y:p.y-25,
+
+        text:"AMMO TUGADI",
+
+        life:100,
+
+        big:false
+
+      });
+
+      /* qo'l bo'sh */
+
+      p.weapon=-1;
+      p.ammo=0;
+
+    }
+
+  }
+
+}
+
+
+/* =====================================================
+                        SHOOT
+===================================================== */
+
+function shoot(p){
+
+  if(p.weapon===-1)
+    return;
+
+  const weapon=
+    weapons[p.weapon];
+
+
+  for(
+    let i=0;
+    i<weapon.count;
+    i++
+  ){
+
+    const base=
+      p.facing<0?
+      Math.PI:
+      0;
+
+    const spread=
+      (Math.random()-.5)*
+      weapon.spread;
+
+    const angle=
+      base+spread;
+
+
+    bullets.push({
+
+      x:
+        p.x+
+        p.w/2+
+        p.facing*28,
+
+      y:
+        p.y+24,
+
+      vx:
+        Math.cos(angle)*
+        weapon.speed,
+
+      vy:
+        Math.sin(angle)*
+        weapon.speed,
+
+      owner:p,
+
+      damage:weapon.damage,
+
+      color:weapon.color,
+
+      size:weapon.size,
+
+      life:100
+
+    });
+
+  }
+
+}
+
+
+/* =====================================================
+                     BULLETS
+===================================================== */
+
+function updateBullets(){
+
+  for(
+    let i=bullets.length-1;
+    i>=0;
+    i--
+  ){
+
+    const b=bullets[i];
+
+    b.x+=b.vx;
+    b.y+=b.vy;
+
+    b.life--;
+
+
+    const enemy=
+      b.owner===p1?
+      p2:
+      p1;
+
+    let remove=false;
+
+
+    /* PLATFORM */
+
+    for(const plat of platforms){
+
+      if(
+
+        b.x>plat.x &&
+        b.x<plat.x+plat.w &&
+        b.y>plat.y &&
+        b.y<plat.y+plat.h
+
+      ){
+
+        remove=true;
+
+        createHitParticles(
+          b.x,
+          b.y,
+          b.color
+        );
+
+        break;
+
+      }
+
+    }
+
+
+    /* PLAYER */
+
+    if(
+      !remove &&
+      hitTest(b,enemy)
+    ){
+
+      enemy.hp-=b.damage;
+
+      createHitParticles(
+        b.x,
+        b.y,
+        b.color
+      );
+
+      remove=true;
+
+
+      if(enemy.hp<=0){
+
+        endRound(
+          b.owner
+        );
+
+      }
+
+    }
+
+
+    if(
+
+      b.x<-50 ||
+      b.x>W+50 ||
+      b.y<-50 ||
+      b.y>H+50 ||
+      b.life<=0
+
+    ){
+
+      remove=true;
+
+    }
+
+
+    if(remove)
+      bullets.splice(i,1);
+
+  }
+
+}
+
+
+function hitTest(b,p){
+
+  return(
+
+    b.x>p.x-5 &&
+    b.x<p.x+p.w+5 &&
+    b.y>p.y-5 &&
+    b.y<p.y+p.h+5
+
+  );
+
+}
+
+
+/* =====================================================
+                     END ROUND
+===================================================== */
+
+function endRound(w){
+
+  if(gameOver)
+    return;
+
+  gameOver=true;
+
+  winner=w;
+
+
+  if(w===p1)
+    kills1++;
+  else
+    kills2++;
+
+
+  texts.push({
+
+    x:W/2,
+
+    y:240,
+
+    text:"+1 KILL",
+
+    life:100,
+
+    big:true
+
+  });
+
+
+  for(let i=0;i<50;i++){
+
+    particles.push({
+
+      x:w.x+w.w/2,
+
+      y:w.y+20,
+
+      vx:(Math.random()-.5)*11,
+
+      vy:(Math.random()-.5)*11,
+
+      life:40+Math.random()*60,
+
+      size:3+Math.random()*5,
+
+      color:w.color
+
+    });
+
+  }
+
+}
+
+
+/* =====================================================
+                     PARTICLES
+===================================================== */
+
+function createHitParticles(
+  x,
+  y,
+  color
+){
+
+  for(let i=0;i<10;i++){
+
+    particles.push({
+
+      x:x,
+      y:y,
+
+      vx:(Math.random()-.5)*8,
+
+      vy:(Math.random()-.5)*8,
+
+      life:20+Math.random()*25,
+
+      size:2+Math.random()*4,
+
+      color:color
+
+    });
+
+  }
+
+}
+
+
+function updateParticles(){
+
+  for(
+    let i=particles.length-1;
+    i>=0;
+    i--
+  ){
+
+    const p=particles[i];
+
+    p.x+=p.vx;
+    p.y+=p.vy;
+
+    p.vy+=.12;
+
+    p.life--;
+
+
+    if(p.life<=0)
+      particles.splice(i,1);
+
+  }
+
+}
+
+
+/* =====================================================
+                        TEXTS
+===================================================== */
+
+function updateTexts(){
+
+  for(
+    let i=texts.length-1;
+    i>=0;
+    i--
+  ){
+
+    const t=texts[i];
+
+    t.y-=1;
+
+    t.life--;
+
+
+    if(t.life<=0)
+      texts.splice(i,1);
+
+  }
+
+}
+
+
+/* =====================================================
+                    BACKGROUND
+===================================================== */
+
+function drawBackground(){
+
+  const z=zones[zone];
+
+
+  const g=
+    ctx.createLinearGradient(
+      0,0,0,H
+    );
+
+  g.addColorStop(0,z.sky1);
+  g.addColorStop(1,z.sky2);
+
+
+  ctx.fillStyle=g;
+
+  ctx.fillRect(
+    0,0,W,H
+  );
+
+
+  if(zone===5){
+
+    drawSpace();
+
+  }
+
+  else{
+
+    ctx.fillStyle="#ffe477";
+
+    ctx.beginPath();
+
+    ctx.arc(
+      1350,
+      120,
+      55,
+      0,
+      Math.PI*2
+    );
+
+    ctx.fill();
+
+
+    cloud(180,120,1);
+    cloud(700,90,.8);
+    cloud(1050,170,.7);
+
+  }
+
+
+  if(zone===0)
+    drawMountains();
+
+  if(zone===1)
+    drawCity();
+
+  if(zone===2)
+    drawFactory();
+
+  if(zone===3)
+    drawDesert();
+
+  if(zone===4)
+    drawIce();
+
+  if(zone===6)
+    drawRooftops();
+
+  if(zone===7)
+    drawVolcano();
+
+}
+
+
+/* =====================================================
+                       CLOUD
+===================================================== */
+
+function cloud(x,y,s){
+
+  ctx.save();
+
+  ctx.translate(x,y);
+
+  ctx.scale(s,s);
+
+  ctx.fillStyle=
+    "rgba(255,255,255,.7)";
+
+  ctx.beginPath();
+
+  ctx.arc(0,10,28,0,Math.PI*2);
+  ctx.arc(30,0,35,0,Math.PI*2);
+  ctx.arc(65,15,25,0,Math.PI*2);
+
+  ctx.fill();
+
+  ctx.restore();
+
+}
+
+
+/* =====================================================
+                     MOUNTAINS
+===================================================== */
+
+function drawMountains(){
+
+  ctx.fillStyle="#65966c";
+
+  ctx.beginPath();
+
+  ctx.moveTo(0,500);
+
+  ctx.lineTo(220,280);
+  ctx.lineTo(430,500);
+
+  ctx.lineTo(650,260);
+  ctx.lineTo(900,500);
+
+  ctx.lineTo(1150,300);
+  ctx.lineTo(1500,500);
+
+  ctx.lineTo(1500,760);
+  ctx.lineTo(0,760);
+
+  ctx.closePath();
+
+  ctx.fill();
+
+}
+
+
+/* =====================================================
+                        CITY
+===================================================== */
+
+function drawCity(){
+
+  for(
+    let x=0;
+    x<W;
+    x+=105
+  ){
+
+    const h=
+      120+
+      ((x*7)%220);
+
+    ctx.fillStyle="#292d39";
+
+    ctx.fillRect(
+      x,
+      760-h,
+      82,
+      h
+    );
+
+
+    ctx.fillStyle="#ffe66d";
+
+    for(
+      let y=760-h+20;
+      y<750;
+      y+=30
+    ){
+
+      ctx.fillRect(
+        x+12,y,15,12
+      );
+
+      ctx.fillRect(
+        x+48,y,15,12
+      );
+
+    }
+
+  }
+
+}
+
+
+/* =====================================================
+                       FACTORY
+===================================================== */
+
+function drawFactory(){
+
+  ctx.fillStyle="#34353c";
+
+  ctx.fillRect(
+    0,
+    530,
+    W,
+    230
+  );
+
+
+  for(
+    let x=100;
+    x<W;
+    x+=260
+  ){
+
+    ctx.fillStyle="#555";
+
+    ctx.fillRect(
+      x,
+      270,
+      75,
+      260
+    );
+
+
+    ctx.fillStyle="#444";
+
+    ctx.fillRect(
+      x-15,
+      245,
+      105,
+      30
+    );
+
+  }
+
+}
+
+
+/* =====================================================
+                       DESERT
+===================================================== */
+
+function drawDesert(){
+
+  ctx.fillStyle="#e2a45a";
+
+  for(
+    let x=0;
+    x<W;
+    x+=180
+  ){
+
+    ctx.beginPath();
+
+    ctx.arc(
+      x+90,
+      700,
+      120,
+      Math.PI,
+      Math.PI*2
+    );
+
+    ctx.fill();
+
+  }
+
+}
+
+
+/* =====================================================
+                         ICE
+===================================================== */
+
+function drawIce(){
+
+  ctx.fillStyle=
+    "rgba(255,255,255,.55)";
+
+  for(
+    let x=0;
+    x<W;
+    x+=180
+  ){
+
+    ctx.beginPath();
+
+    ctx.moveTo(x,700);
+
+    ctx.lineTo(
+      x+90,
+      480
+    );
+
+    ctx.lineTo(
+      x+180,
+      700
+    );
+
+    ctx.closePath();
+
+    ctx.fill();
+
+  }
+
+}
+
+
+/* =====================================================
+                       SPACE
+===================================================== */
+
+function drawSpace(){
+
+  ctx.fillStyle="#fff";
+
+  for(
+    let i=0;
+    i<130;
+    i++
+  ){
+
+    const x=
+      (i*173)%W;
+
+    const y=
+      (i*83)%600;
+
+    ctx.globalAlpha=
+      .4+(i%5)/10;
+
+    ctx.fillRect(
+      x,y,2,2
+    );
+
+  }
+
+  ctx.globalAlpha=1;
+
+
+  ctx.fillStyle="#ddd";
+
+  ctx.beginPath();
+
+  ctx.arc(
+    1280,
+    120,
+    55,
+    0,
+    Math.PI*2
+  );
+
+  ctx.fill();
+
+}
+
+
+/* =====================================================
+                     ROOFTOPS
+===================================================== */
+
+function drawRooftops(){
+
+  for(
+    let x=0;
+    x<W;
+    x+=150
+  ){
+
+    const h=
+      130+
+      ((x*13)%160);
+
+    ctx.fillStyle="#343944";
+
+    ctx.fillRect(
+      x,
+      760-h,
+      115,
+      h
+    );
+
+
+    ctx.fillStyle="#5e6575";
+
+    ctx.fillRect(
+      x,
+      760-h,
+      115,
+      8
+    );
+
+  }
+
+}
+
+
+/* =====================================================
+                      VOLCANO
+===================================================== */
+
+function drawVolcano(){
+
+  ctx.fillStyle="#421716";
+
+  ctx.beginPath();
+
+  ctx.moveTo(0,650);
+
+  ctx.lineTo(180,430);
+  ctx.lineTo(360,650);
+
+  ctx.lineTo(650,350);
+  ctx.lineTo(930,650);
+
+  ctx.lineTo(1200,380);
+  ctx.lineTo(1500,650);
+
+  ctx.lineTo(1500,760);
+  ctx.lineTo(0,760);
+
+  ctx.closePath();
+
+  ctx.fill();
+
+
+  ctx.fillStyle="#ff6a2a";
+
+  ctx.fillRect(
+    0,
+    720,
+    W,
+    40
+  );
+
+}
+
+
+/* =====================================================
+                     PLATFORMS
+===================================================== */
+
+function drawPlatforms(){
+
+  const z=zones[zone];
+
+
+  for(const p of platforms){
+
+    ctx.fillStyle=z.ground;
+
+    ctx.fillRect(
+      p.x,
+      p.y,
+      p.w,
+      p.h
+    );
+
+
+    ctx.fillStyle=
+      "rgba(255,255,255,.22)";
+
+    ctx.fillRect(
+      p.x,
+      p.y,
+      p.w,
+      5
+    );
+
+
+    ctx.strokeStyle=
+      "rgba(0,0,0,.35)";
+
+    ctx.strokeRect(
+      p.x,
+      p.y,
+      p.w,
+      p.h
+    );
+
+  }
+
+}
+
+
+/* =====================================================
+                   WEAPON PICKUPS
+===================================================== */
+
+function drawPickups(){
+
+  for(const item of pickups){
+
+    const weapon=
+      weapons[item.weapon];
+
+    const pulse=
+      Math.sin(Date.now()/180)*3;
+
+
+    ctx.save();
+
+    ctx.translate(
+      item.x+25,
+      item.y+21
+    );
+
+
+    ctx.shadowBlur=20;
+
+    ctx.shadowColor=
+      weapon.color;
+
+
+    /* weapon box */
+
+    ctx.fillStyle=
+      "rgba(0,0,0,.75)";
+
+    ctx.fillRect(
+      -25,
+      -20,
+      50,
+      40
+    );
+
+
+    drawGunShape(
+      weapon,
+      0,
+      0,
+      1
+    );
+
+
+    ctx.shadowBlur=0;
+
+
+    ctx.fillStyle="#fff";
+
+    ctx.font="bold 10px Arial";
+
+    ctx.textAlign="center";
+
+    ctx.fillText(
+      weapon.name,
+      0,
+      34
+    );
+
+
+    ctx.restore();
+
+  }
+
+}
+
+
+/* =====================================================
+                   REALISTIC GAME GUN
+===================================================== */
+
+function drawGunShape(
+  weapon,
+  x,
+  y,
+  scale
+){
+
+  ctx.save();
+
+  ctx.translate(x,y);
+
+  ctx.scale(scale,scale);
+
+  ctx.fillStyle="#171a20";
+
+
+  if(weapon.type==="pistol"){
+
+    ctx.fillRect(
+      -17,
+      -5,
+      30,
+      8
+    );
+
+    ctx.fillRect(
+      5,
+      3,
+      7,
+      13
+    );
+
+    ctx.fillRect(
+      -4,
+      3,
+      10,
+      5
+    );
+
+    ctx.fillStyle="#555";
+
+    ctx.fillRect(
+      8,
+      -4,
+      8,
+      3
+    );
+
+  }
+
+
+  else if(
+    weapon.type==="smg"
+  ){
+
+    ctx.fillRect(
+      -24,
+      -5,
+      43,
+      8
+    );
+
+    ctx.fillRect(
+      12,
+      3,
+      9,
+      11
+    );
+
+    ctx.fillRect(
+      -7,
+      3,
+      7,
+      12
+    );
+
+    ctx.fillStyle="#444";
+
+    ctx.fillRect(
+      -17,
+      -9,
+      22,
+      4
+    );
+
+  }
+
+
+  else if(
+    weapon.type==="shotgun"
+  ){
+
+    ctx.fillRect(
+      -25,
+      -6,
+      50,
+      7
+    );
+
+    ctx.fillRect(
+      15,
+      1,
+      9,
+      12
+    );
+
+    ctx.fillStyle="#5b3b24";
+
+    ctx.fillRect(
+      -5,
+      1,
+      18,
+      7
+    );
+
+    ctx.fillStyle="#777";
+
+    ctx.fillRect(
+      -25,
+      -9,
+      35,
+      3
+    );
+
+  }
+
+
+  else if(
+    weapon.type==="laser"
+  ){
+
+    ctx.fillRect(
+      -23,
+      -5,
+      45,
+      8
+    );
+
+    ctx.fillRect(
+      -5,
+      3,
+      8,
+      11
+    );
+
+    ctx.fillStyle=
+      weapon.color;
+
+    ctx.fillRect(
+      15,
+      -4,
+      10,
+      4
+    );
+
+  }
+
+
+  else if(
+    weapon.type==="plasma"
+  ){
+
+    ctx.fillRect(
+      -22,
+      -6,
+      42,
+      11
+    );
+
+    ctx.fillRect(
+      -5,
+      5,
+      9,
+      12
+    );
+
+    ctx.fillStyle=
+      weapon.color;
+
+    ctx.beginPath();
+
+    ctx.arc(
+      20,
+      0,
+      6,
+      0,
+      Math.PI*2
+    );
+
+    ctx.fill();
+
+  }
+
+
+  else if(
+    weapon.type==="heavy"
+  ){
+
+    ctx.fillRect(
+      -27,
+      -8,
+      55,
+      13
+    );
+
+    ctx.fillRect(
+      -3,
+      5,
+      11,
+      14
+    );
+
+    ctx.fillStyle="#555";
+
+    ctx.fillRect(
+      -22,
+      -12,
+      30,
+      4
+    );
+
+  }
+
+
+  ctx.restore();
+
+}
+
+
+/* =====================================================
+                       PLAYER
+===================================================== */
+
+function drawPlayer(p){
+
+  ctx.save();
+
+
+  ctx.translate(
+    p.x+p.w/2,
+    p.y+p.h/2
+  );
+
+
+  if(p.facing<0)
+    ctx.scale(-1,1);
+
+
+  /* SHADOW */
+
+  ctx.fillStyle=
+    "rgba(0,0,0,.25)";
+
+  ctx.beginPath();
+
+  ctx.ellipse(
+    0,
+    34,
+    28,
+    7,
+    0,
+    0,
+    Math.PI*2
+  );
+
+  ctx.fill();
+
+
+  /* LEGS */
+
+  ctx.fillStyle="#20242b";
+
+  ctx.fillRect(
+    -13,
+    18,
+    10,
+    23
+  );
+
+  ctx.fillRect(
+    4,
+    18,
+    10,
+    23
+  );
+
+
+  /* BODY */
+
+  ctx.fillStyle=p.color;
+
+  ctx.fillRect(
+    -19,
+    -15,
+    38,
+    37
+  );
+
+
+  /* HEAD */
+
+  ctx.fillStyle="#ffd0a6";
+
+  ctx.beginPath();
+
+  ctx.arc(
+    0,
+    -30,
+    16,
+    0,
+    Math.PI*2
+  );
+
+  ctx.fill();
+
+
+  /* HELMET */
+
+  ctx.fillStyle=
+    p.type===1?
+    "#dce9ff":
+    "#191919";
+
+  ctx.beginPath();
+
+  ctx.arc(
+    0,
+    -32,
+    19,
+    Math.PI,
+    Math.PI*2
+  );
+
+  ctx.fill();
+
+
+  ctx.fillStyle=
+    p.type===1?
+    "#67c8ff":
+    "#111";
+
+  ctx.fillRect(
+    -14,
+    -31,
+    28,
+    8
+  );
+
+
+  /* EYE */
+
+  ctx.fillStyle="#111";
+
+  ctx.fillRect(
+    5,
+    -31,
+    3,
+    3
+  );
+
+
+  /* GUN */
+
+  if(p.weapon!==-1){
+
+    ctx.save();
+
+    ctx.translate(
+      22,
+      -5
+    );
+
+    drawGunShape(
+      weapons[p.weapon],
+      0,
+      0,
+      .72
+    );
+
+    ctx.restore();
+
+  }
+
+  else{
+
+    /* EMPTY HAND */
+
+    ctx.fillStyle="#ffd0a6";
+
+    ctx.beginPath();
+
+    ctx.arc(
+      22,
+      -1,
+      6,
+      0,
+      Math.PI*2
+    );
+
+    ctx.fill();
+
+  }
+
+
+  ctx.restore();
+
+
+  /* NAME */
+
+  ctx.textAlign="center";
+
+  ctx.font="bold 12px Arial";
+
+  ctx.fillStyle="#fff";
+
+  ctx.fillText(
+    p.name,
+    p.x+p.w/2,
+    p.y-8
+  );
+
+}
+
+
+/* =====================================================
+                       BULLETS
+===================================================== */
+
+function drawBullets(){
+
+  for(const b of bullets){
+
+    ctx.fillStyle=b.color;
+
+    ctx.shadowBlur=14;
+
+    ctx.shadowColor=b.color;
+
+
+    ctx.beginPath();
+
+    ctx.arc(
+      b.x,
+      b.y,
+      b.size,
+      0,
+      Math.PI*2
+    );
+
+    ctx.fill();
+
+
+    ctx.shadowBlur=0;
+
+  }
+
+}
+
+
+/* =====================================================
+                      PARTICLES
+===================================================== */
+
+function drawParticles(){
+
+  for(const p of particles){
+
+    ctx.globalAlpha=
+      Math.max(
+        0,
+        p.life/60
+      );
+
+    ctx.fillStyle=p.color;
+
+    ctx.fillRect(
+      p.x,
+      p.y,
+      p.size,
+      p.size
+    );
+
+  }
+
+  ctx.globalAlpha=1;
+
+}
+
+
+/* =====================================================
+                        TEXT
+===================================================== */
+
+function drawTexts(){
+
+  for(const t of texts){
+
+    ctx.globalAlpha=
+      Math.max(
+        0,
+        t.life/100
+      );
+
+    ctx.textAlign="center";
+
+    ctx.font=
+      t.big?
+      "bold 54px Arial":
+      "bold 20px Arial";
+
+    ctx.fillStyle="#fff";
+
+    ctx.strokeStyle="#000";
+
+    ctx.lineWidth=6;
+
+
+    ctx.strokeText(
+      t.text,
+      t.x,
+      t.y
+    );
+
+
+    ctx.fillText(
+      t.text,
+      t.x,
+      t.y
+    );
+
+  }
+
+  ctx.globalAlpha=1;
+
+}
+
+
+/* =====================================================
+                       HP BAR
+===================================================== */
+
+function hpBar(
+  p,
+  x,
+  y,
+  w
+){
+
+  ctx.fillStyle=
+    "rgba(0,0,0,.55)";
+
+  ctx.fillRect(
+    x,
+    y,
+    w,
+    18
+  );
+
+
+  const hp=
+    Math.max(
+      0,
+      p.hp/p.maxHp
+    );
+
+
+  ctx.fillStyle=p.color;
+
+  ctx.fillRect(
+    x,
+    y,
+    w*hp,
+    18
+  );
+
+
+  ctx.strokeStyle="#fff";
+
+  ctx.strokeRect(
+    x,
+    y,
+    w,
+    18
+  );
+
+}
+
+
+/* =====================================================
+                         HUD
+===================================================== */
+
+function drawHUD(){
+
+  ctx.textAlign="center";
+
+  ctx.font="bold 21px Arial";
+
+  ctx.fillStyle="#fff";
+
+
+  ctx.fillText(
+    `ZONE ${zone+1}: ${zones[zone].name}`,
+    W/2,
+    28
+  );
+
+
+  ctx.font="bold 29px Arial";
+
+  ctx.fillText(
+    `P1 ${kills1}  —  ${kills2} P2`,
+    W/2,
+    63
+  );
+
+
+  /* P1 */
+
+  ctx.textAlign="left";
+
+  ctx.font="bold 19px Arial";
+
+  ctx.fillText(
+    `🔵 P1   KILLS: ${kills1}`,
+    25,
+    35
+  );
+
+
+  hpBar(
+    p1,
+    25,
+    48,
+    260
+  );
+
+
+  ctx.font="14px Arial";
+
+
+  if(p1.weapon===-1){
+
+    ctx.fillText(
+      `HP ${Math.max(0,Math.ceil(p1.hp))}   ✋ QO'L BO'SH`,
+      25,
+      86
+    );
+
+  }
+
+  else{
+
+    ctx.fillText(
+      `HP ${Math.max(0,Math.ceil(p1.hp))}   🔫 ${weapons[p1.weapon].name}   AMMO: ${p1.ammo}`,
+      25,
+      86
+    );
+
+  }
+
+
+  /* P2 */
+
+  ctx.textAlign="right";
+
+  ctx.font="bold 19px Arial";
+
+  ctx.fillText(
+    `P2   KILLS: ${kills2} 🔴`,
+    W-25,
+    35
+  );
+
+
+  hpBar(
+    p2,
+    W-285,
+    48,
+    260
+  );
+
+
+  ctx.font="14px Arial";
+
+
+  if(p2.weapon===-1){
+
+    ctx.fillText(
+      `HP ${Math.max(0,Math.ceil(p2.hp))}   ✋ QO'L BO'SH`,
+      W-25,
+      86
+    );
+
+  }
+
+  else{
+
+    ctx.fillText(
+      `HP ${Math.max(0,Math.ceil(p2.hp))}   🔫 ${weapons[p2.weapon].name}   AMMO: ${p2.ammo}`,
+      W-25,
+      86
+    );
+
+  }
+
+
+  /* BOTTOM */
+
+  ctx.textAlign="center";
+
+
+  ctx.fillStyle=
+    "rgba(0,0,0,.55)";
+
+  ctx.fillRect(
+    W/2-360,
+    H-48,
+    720,
+    34
+  );
+
+
+  ctx.fillStyle="#fff";
+
+  ctx.font="13px Arial";
+
+
+  ctx.fillText(
+    `🦘 DOUBLE JUMP | Q/E + O/I QUROL | F/L OTISH | Z/X ZONA | R RESTART`,
+    W/2,
+    H-26
+  );
+
+}
+
+
+/* =====================================================
+                     GAME OVER
+===================================================== */
+
+function drawGameOver(){
+
+  if(!gameOver)
+    return;
+
+
+  ctx.fillStyle=
+    "rgba(0,0,0,.72)";
+
+  ctx.fillRect(
+    0,
+    0,
+    W,
+    H
+  );
+
+
+  ctx.textAlign="center";
+
+
+  ctx.font="bold 62px Arial";
+
+  ctx.fillStyle=winner.color;
+
+
+  ctx.fillText(
+    `${winner.name} G‘OLIB!`,
+    W/2,
+    300
+  );
+
+
+  ctx.font="bold 35px Arial";
+
+  ctx.fillStyle="#fff";
+
+
+  ctx.fillText(
+    `🏆 KILLS: ${
+      winner===p1?
+      kills1:
+      kills2
+    }`,
+    W/2,
+    360
+  );
+
+
+  ctx.font="24px Arial";
+
+
+  ctx.fillText(
+    "R — yangi raund",
+    W/2,
+    420
+  );
+
+
+  ctx.fillText(
+    "Z / X — boshqa zona",
+    W/2,
+    458
+  );
+
+}
+
+
+/* =====================================================
+                        UPDATE
+===================================================== */
+
+function update(){
+
+  updatePlayer(
+    p1,
+    p2
+  );
+
+  updatePlayer(
+    p2,
+    p1
+  );
+
+  updateBullets();
+
+  updatePickups();
+
+  updateParticles();
+
+  updateTexts();
+
+}
+
+
+/* =====================================================
+                          DRAW
+===================================================== */
+
+function draw(){
+
+  drawBackground();
+
+  drawPlatforms();
+
+  drawPickups();
+
+  drawBullets();
+
+  drawPlayer(p1);
+
+  drawPlayer(p2);
+
+  drawParticles();
+
+  drawTexts();
+
+  drawHUD();
+
+  drawGameOver();
+
+}
+
+
+/* =====================================================
+                         GAME LOOP
+===================================================== */
+
+function loop(){
+
+  update();
+
+  draw();
+
+  requestAnimationFrame(loop);
+
+}
+
+
+/* START */
+
+spawnFirstPickups();
+
+loop();
+
+</script>
+
+</body>
+</html>
+```
